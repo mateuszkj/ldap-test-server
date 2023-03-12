@@ -1,0 +1,46 @@
+stages:
+  - test
+  - publish
+
+variables:
+  GIT_STRATEGY: fetch
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+default:
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .cargo/ # działa ponieważ ustawiliśmy CARGO_HOME w katalogu projektu
+      - target/ # Zakomentuj gdy chcesz by od zera się budowało, potem możesz odkomentować
+  before_script:
+    - echo $CI_PIPELINE_ID
+    - rustc --version && cargo --version
+
+rustfmt:
+  stage: test
+  image: "rustdocker/rust:stable"
+  script:
+    - cargo fmt -- --check
+    - cargo verify-project
+
+clippy:
+  stage: test
+  image: "rustdocker/rust:stable"
+  script:
+    - cargo clippy --all-features -- -D warnings
+
+test:
+  stage: test
+  image: "rustdocker/rust:stable"
+  script:
+    - apt-get update && apt-get dist-upgrade -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends slapd ldap-utils
+    - cargo build --all-features --release
+    - cargo test --all-features --release --verbose
+
+release: 
+  stage: test
+  image: "rustdocker/rust:stable"
+  script:
+    - cargo build --release
+
