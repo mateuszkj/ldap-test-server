@@ -1,16 +1,14 @@
 use std::convert::AsRef;
 use std::path::Path;
-use std::{
-    io::{BufRead, BufReader},
-    net::{TcpStream, ToSocketAddrs},
-    process::{Child, Command, Stdio},
-    thread::sleep,
-    time::Duration,
-};
+use std::time::Duration;
+use std::{net::ToSocketAddrs, process::Stdio};
+use tokio::io::AsyncBufReadExt;
+use tokio::net::TcpStream;
+use tokio::process::{Child, Command};
+use tokio::time::{sleep, timeout};
 use url::Url;
 
 use tempfile::{tempdir, TempDir};
-use timeout_readwrite::TimeoutReader;
 
 const INIT_LDIF: &str = include_str!("init.ldif");
 const POSSIBLE_SCHEMA_DIR: &[&str] = &[
@@ -27,15 +25,16 @@ pub struct LdapServerBuilder {
 }
 
 impl LdapServerBuilder {
-    pub fn init(base_dn: &str) -> Self {
-        LdapServerBuilder::init_with_config(base_dn, INIT_LDIF)
+    pub async fn init(base_dn: &str) -> Self {
+        LdapServerBuilder::init_with_config(base_dn, INIT_LDIF).await
     }
 
-    pub fn init_with_config(base_dn: &str, init_config: &str) -> Self {
+    pub async fn init_with_config(base_dn: &str, init_config: &str) -> Self {
         let root_dn = format!("cn=admin,{base_dn}");
         let root_pw = "secret".to_string();
 
         let schema_dir = find_slapd_schema_dir()
+            .await
             .expect("no slapd schema directory found. Is openldap server installed?");
         let schema_dir = Url::from_file_path(schema_dir).unwrap();
 
@@ -46,7 +45,7 @@ impl LdapServerBuilder {
             .replace("@ROOTPW@", &root_pw);
 
         let builder = LdapServerBuilder::init_empty(base_dn, root_dn, root_pw);
-        builder.add_ldif(&init_ldif, 0)
+        builder.add_ldif(&init_ldif, 0).await
     }
 
     pub fn init_empty(
@@ -67,13 +66,13 @@ impl LdapServerBuilder {
         }
     }
 
-    pub fn add_ldif(self, ldif_text: &str, database_number: u8) -> Self {
+    pub async fn add_ldif(self, ldif_text: &str, database_number: u8) -> Self {
         let tmp_ldif = self.dir.path().join("tmp.ldif");
-        std::fs::write(&tmp_ldif, ldif_text).unwrap();
-        self.add_ldif_file(tmp_ldif, database_number)
+        tokio::fs::write(&tmp_ldif, ldif_text).await.unwrap();
+        self.add_ldif_file(tmp_ldif, database_number).await
     }
 
-    pub fn add_ldif_file<P: AsRef<Path>>(self, file: P, database_number: u8) -> Self {
+    pub async fn add_ldif_file<P: AsRef<Path>>(self, file: P, database_number: u8) -> Self {
         let file = file.as_ref();
 
         let db_number = database_number.to_string();
@@ -85,6 +84,7 @@ impl LdapServerBuilder {
             .arg(file)
             .current_dir(&self.dir)
             .output()
+            .await
             .expect("failed to execute slapadd");
 
         if !output.status.success() {
@@ -101,7 +101,7 @@ impl LdapServerBuilder {
     }
 
     // Start LDAP server
-    pub fn run(self) -> LdapServerConn {
+    pub async fn run(self) -> LdapServerConn {
         let host = "localhost".to_string();
         let port = portpicker::pick_unused_port().expect("no free tcp port to bind");
         let url = format!("ldap://{host}:{port}");
@@ -116,32 +116,32 @@ impl LdapServerBuilder {
 
         // wait unitl slapd server has started
         let stderr = server.stderr.take().unwrap();
-        let timeouted = TimeoutReader::new(stderr, Duration::from_secs(5));
-        let reader = BufReader::new(timeouted);
-
-        let mut started = false;
-        for line in reader.lines() {
-            let line_str = line.unwrap();
-            println!("{}", line_str);
-            if line_str.ends_with("slapd starting") {
-                started = true;
-                break;
+        let mut lines = tokio::io::BufReader::new(stderr).lines();
+        let timeouted = timeout(Duration::from_secs(5), async {
+            while let Some(line) = lines.next_line().await.unwrap() {
+                if line.ends_with("slapd starting") {
+                    return true;
+                }
             }
+            false
+        })
+        .await;
+
+        if timeouted.is_err() || timeouted == Ok(false) {
+            let _ = server.kill().await;
+            panic!("Failed to start slapd server");
         }
 
-        if !started {
-            server.kill().ok();
-            panic!("Failed to start slapd server stderr");
-        }
+        let timeouted = timeout(Duration::from_secs(2), async {
+            while !is_tcp_port_open(&host, port).await {
+                println!("tcp port {port} is not open yet, waiting...");
+                sleep(Duration::from_micros(100)).await;
+            }
+        })
+        .await;
 
-        // test if tcp port is open
-        if !is_tcp_port_open(&host, port) {
-            println!("tcp port {port} is not open yet, waiting...");
-            sleep(Duration::from_secs(1));
-        }
-
-        if !is_tcp_port_open(&host, port) {
-            server.kill().ok();
+        if timeouted.is_err() {
+            let _ = server.kill().await;
             panic!("Failed to start slapd server, port {port} not open");
         }
 
@@ -159,19 +159,25 @@ impl LdapServerBuilder {
         }
     }
 }
-fn find_slapd_schema_dir() -> Option<&'static Path> {
+
+async fn find_slapd_schema_dir() -> Option<&'static Path> {
     for dir in POSSIBLE_SCHEMA_DIR {
         let dir: &Path = dir.as_ref();
-        if dir.is_dir() {
+        if tokio::fs::metadata(dir)
+            .await
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
             return Some(dir);
         }
     }
     None
 }
 
-fn is_tcp_port_open(host: &str, port: u16) -> bool {
+async fn is_tcp_port_open(host: &str, port: u16) -> bool {
     let addr = (host, port).to_socket_addrs().unwrap().next().unwrap();
-    TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok()
+    let Ok(sock) = timeout(Duration::from_secs(1), TcpStream::connect(&addr)).await else { return false };
+    sock.is_ok()
 }
 
 #[derive(Debug)]
@@ -212,25 +218,27 @@ impl LdapServerConn {
         &self.root_pw
     }
 
-    pub fn add_ldif(&self, ldif_text: &str) -> &Self {
+    pub async fn add_ldif(&self, ldif_text: &str) -> &Self {
         let tmp_ldif = self.dir.path().join("tmp.ldif");
-        std::fs::write(&tmp_ldif, ldif_text).unwrap();
-        self.add_ldif_file(tmp_ldif)
+        tokio::fs::write(&tmp_ldif, ldif_text).await.unwrap();
+        self.add_ldif_file(tmp_ldif).await
     }
 
-    pub fn add_ldif_config(&self, ldif_text: &str) -> &Self {
+    pub async fn add_ldif_config(&self, ldif_text: &str) -> &Self {
         let tmp_ldif = self.dir.path().join("tmp.ldif");
-        std::fs::write(&tmp_ldif, ldif_text).unwrap();
-        self.add_ldif_file_binddn(tmp_ldif, "cn=config", "secret");
+        tokio::fs::write(&tmp_ldif, ldif_text).await.unwrap();
+        self.add_ldif_file_binddn(tmp_ldif, "cn=config", "secret")
+            .await;
         self
     }
 
-    pub fn add_ldif_file<P: AsRef<Path>>(&self, file: P) -> &Self {
-        self.add_ldif_file_binddn(file, self.root_dn(), self.root_pw());
+    pub async fn add_ldif_file<P: AsRef<Path>>(&self, file: P) -> &Self {
+        self.add_ldif_file_binddn(file, self.root_dn(), self.root_pw())
+            .await;
         self
     }
 
-    pub fn add_ldif_file_binddn<P: AsRef<Path>>(
+    pub async fn add_ldif_file_binddn<P: AsRef<Path>>(
         &self,
         file: P,
         binddn: &str,
@@ -238,11 +246,12 @@ impl LdapServerConn {
     ) -> &Self {
         let file = file.as_ref();
 
-        let output = Command::new("ldapadd")
+        let output = tokio::process::Command::new("ldapadd")
             .args(["-x", "-D", binddn, "-w", password, "-H", self.url(), "-f"])
             .arg(file)
             .current_dir(&self.dir)
             .output()
+            .await
             .expect("failed to execute ldapadd");
 
         if !output.status.success() {
@@ -261,26 +270,29 @@ impl LdapServerConn {
 
 impl Drop for LdapServerConn {
     fn drop(&mut self) {
-        if let Err(e) = self.server.kill() {
+        if let Err(e) = self.server.start_kill() {
             println!(
-                "failed to kill slapd server: {}, pid: {}",
+                "failed to kill slapd server: {}, pid: {:?}",
                 e,
                 self.server.id()
             );
         } else {
-            println!("killed slapd server pid: {}", self.server.id());
+            println!("killed slapd server pid: {:?}", self.server.id());
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+    use std::time::Instant;
 
-    #[test]
-    fn run_slapd() {
+    #[tokio::test]
+    async fn run_slapd() {
+        let started = Instant::now();
+
         let server = LdapServerBuilder::init("dc=planetexpress,dc=com")
+            .await
             .add_ldif(
                 "dn: dc=planetexpress,dc=com
 objectclass: dcObject
@@ -295,10 +307,13 @@ description: Planet Express crew
 ou: people",
                 1,
             )
-            .run();
+            .await
+            .run()
+            .await;
 
-        server.add_ldif(
-            "dn: cn=Amy Wong+sn=Kroker,ou=people,dc=planetexpress,dc=com
+        server
+            .add_ldif(
+                "dn: cn=Amy Wong+sn=Kroker,ou=people,dc=planetexpress,dc=com
 objectClass: top
 objectClass: person
 objectClass: organizationalPerson
@@ -312,8 +327,9 @@ ou: Intern
 uid: amy
 userPassword:: e1NTSEF9d0p2OXMyWjltMGJTMFIxV1k3QjdCRWZEVVZPQzg2Y3BWL3VDMHc9PQ=
  =",
-        );
+            )
+            .await;
 
-        println!("server: {server:?}");
+        println!("Server started in {} ms", started.elapsed().as_millis());
     }
 }

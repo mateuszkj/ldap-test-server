@@ -57,13 +57,7 @@ dn: olcDatabase=mdb,cn=config
 objectClass: olcDatabaseConfig
 objectClass: olcMdbConfig
 olcDatabase: mdb
-# Default to a 1 GiB database for compatibility with 32-bit systems.
-olcDbMaxSize: 1073741824
-# Checkpoint the database periodically in case of system
-# failure and to speed slapd shutdown.
-olcDbCheckpoint: 512 30
-# Save the time that the entry gets modified, for database #1
-olcLastMod: TRUE
+olcDbNosync: TRUE
 # The base of your directory in database #1
 olcSuffix: @BASEDN@
 # Where the database file are physically stored for database #1

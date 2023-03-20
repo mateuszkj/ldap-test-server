@@ -4,7 +4,10 @@ use ldap_test_server::LdapServerBuilder;
 
 #[tokio::test]
 async fn test_bind() {
-    let server = LdapServerBuilder::init("dc=kondej,dc=net").run();
+    let server = LdapServerBuilder::init("dc=kondej,dc=net")
+        .await
+        .run()
+        .await;
 
     let mut client = LdapClient::builder(server.host())
         .port(server.port())
@@ -24,7 +27,10 @@ async fn test_bind() {
 
 #[tokio::test]
 async fn test_query() {
-    let server = LdapServerBuilder::init("dc=planetexpress,dc=com").run();
+    let server = LdapServerBuilder::init("dc=planetexpress,dc=com")
+        .await
+        .run()
+        .await;
 
     server
         .add_ldif(
@@ -40,6 +46,7 @@ objectClass: organizationalUnit
 description: Planet Express crew
 ou: people",
         )
+        .await
         .add_ldif(
             "dn: cn=Philip J. Fry,ou=people,dc=planetexpress,dc=com
 objectClass: inetOrgPerson
@@ -57,7 +64,8 @@ ou: Delivering Crew
 uid: fry
 userPassword:: e3NzaGF9d0wvVG0wSHNaeU90K29jbXlrU290UkpURnczd0ZKOWRlaEU4eFE9PQ==
 ",
-        );
+        )
+        .await;
 
     let mut client = LdapClient::builder(server.host())
         .port(server.port())
@@ -88,8 +96,9 @@ userPassword:: e3NzaGF9d0wvVG0wSHNaeU90K29jbXlrU290UkpURnczd0ZKOWRlaEU4eFE9PQ==
         "cn=Philip J. Fry,ou=people,dc=planetexpress,dc=com"
     );
 
-    server.add_ldif(
-        "dn: cn=Turanga Leela,ou=people,dc=planetexpress,dc=com
+    server
+        .add_ldif(
+            "dn: cn=Turanga Leela,ou=people,dc=planetexpress,dc=com
 objectClass: inetOrgPerson
 objectClass: organizationalPerson
 objectClass: person
@@ -100,7 +109,8 @@ description: Mutant
 employeeType: Captain
 employeeType: Pilot
 givenName: Leela",
-    );
+        )
+        .await;
 
     let item = client
         .search_one(
