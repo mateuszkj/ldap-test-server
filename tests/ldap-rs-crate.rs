@@ -4,10 +4,7 @@ use ldap_test_server::LdapServerBuilder;
 
 #[tokio::test]
 async fn test_bind() {
-    let server = LdapServerBuilder::init("dc=kondej,dc=net")
-        .await
-        .run()
-        .await;
+    let server = LdapServerBuilder::new("dc=kondej,dc=net").run().await;
 
     let mut client = LdapClient::builder(server.host())
         .port(server.port())
@@ -27,8 +24,7 @@ async fn test_bind() {
 
 #[tokio::test]
 async fn test_query() {
-    let server = LdapServerBuilder::init("dc=planetexpress,dc=com")
-        .await
+    let server = LdapServerBuilder::new("dc=planetexpress,dc=com")
         .run()
         .await;
 
@@ -47,24 +43,7 @@ description: Planet Express crew
 ou: people",
         )
         .await
-        .add_ldif(
-            "dn: cn=Philip J. Fry,ou=people,dc=planetexpress,dc=com
-objectClass: inetOrgPerson
-objectClass: organizationalPerson
-objectClass: person
-objectClass: top
-cn: Philip J. Fry
-sn: Fry
-description: Human
-displayName: Fry
-employeeType: Delivery boy
-givenName: Philip
-mail: fry@planetexpress.com
-ou: Delivering Crew
-uid: fry
-userPassword:: e3NzaGF9d0wvVG0wSHNaeU90K29jbXlrU290UkpURnczd0ZKOWRlaEU4eFE9PQ==
-",
-        )
+        .add_ldif_file(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fry.ldif"))
         .await;
 
     let mut client = LdapClient::builder(server.host())

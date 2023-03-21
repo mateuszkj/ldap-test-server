@@ -1,0 +1,14 @@
+dn: cn=Philip J. Fry,ou=people,dc=planetexpress,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+cn: Philip J. Fry
+sn: Fry
+description: Human
+displayName: Fry
+employeeType: Delivery boy
+givenName: Philip
+mail: fry@planetexpress.com
+ou: Delivering Crew
+uid: fry

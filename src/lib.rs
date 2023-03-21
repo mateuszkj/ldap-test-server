@@ -1,5 +1,5 @@
 use std::convert::AsRef;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{net::ToSocketAddrs, process::Stdio};
 use tokio::io::AsyncBufReadExt;
@@ -17,72 +17,137 @@ const POSSIBLE_SCHEMA_DIR: &[&str] = &[
     "/etc/openldap/schema/",
 ];
 
+#[derive(Debug)]
+enum LdapFile {
+    SystemSchema(String),
+    File { template: bool, file: PathBuf },
+    Text { template: bool, content: String },
+}
+
 pub struct LdapServerBuilder {
-    dir: TempDir,
     base_dn: String,
     root_dn: String,
     root_pw: String,
+    includes: Vec<(u8, LdapFile)>,
 }
 
 impl LdapServerBuilder {
-    pub async fn init(base_dn: &str) -> Self {
-        LdapServerBuilder::init_with_config(base_dn, INIT_LDIF).await
-    }
-
-    pub async fn init_with_config(base_dn: &str, init_config: &str) -> Self {
-        let root_dn = format!("cn=admin,{base_dn}");
-        let root_pw = "secret".to_string();
-
-        let schema_dir = find_slapd_schema_dir()
-            .await
-            .expect("no slapd schema directory found. Is openldap server installed?");
-        let schema_dir = Url::from_file_path(schema_dir).unwrap();
-
-        let init_ldif = init_config
-            .replace("@SCHEMADIR@", schema_dir.as_ref())
-            .replace("@BASEDN@", base_dn)
-            .replace("@ROOTDN@", &root_dn)
-            .replace("@ROOTPW@", &root_pw);
-
-        let builder = LdapServerBuilder::init_empty(base_dn, root_dn, root_pw);
-        builder.add_ldif(&init_ldif, 0).await
-    }
-
-    pub fn init_empty(
+    /// Init empty builder
+    pub fn empty(
         base_dn: impl Into<String>,
         root_dn: impl Into<String>,
         root_pw: impl Into<String>,
     ) -> Self {
-        let dir = tempdir().unwrap();
         let base_dn = base_dn.into();
         let root_dn = root_dn.into();
         let root_pw = root_pw.into();
 
         Self {
-            dir,
             base_dn,
             root_dn,
             root_pw,
+            includes: vec![],
         }
     }
 
-    pub async fn add_ldif(self, ldif_text: &str, database_number: u8) -> Self {
-        let tmp_ldif = self.dir.path().join("tmp.ldif");
-        tokio::fs::write(&tmp_ldif, ldif_text).await.unwrap();
-        self.add_ldif_file(tmp_ldif, database_number).await
+    /// Init builder with simple database
+    pub fn new(base_dn: &str) -> Self {
+        let root_dn = format!("cn=admin,{base_dn}");
+        let root_pw = "secret".to_string();
+        LdapServerBuilder::empty(base_dn, root_dn, root_pw).add_template_ldif(0, INIT_LDIF)
     }
 
-    pub async fn add_ldif_file<P: AsRef<Path>>(self, file: P, database_number: u8) -> Self {
-        let file = file.as_ref();
+    /// Add system LDIF from schema dir installed by slapd (usually in /etc/ldap/schema directory)
+    pub fn add_system_ldif(mut self, dbnum: u8, file: &str) -> Self {
+        self.includes
+            .push((dbnum, LdapFile::SystemSchema(file.to_string())));
+        self
+    }
 
-        let db_number = database_number.to_string();
+    /// Add LDIF file with text content
+    pub fn add_ldif(mut self, dbnum: u8, content: &str) -> Self {
+        self.includes.push((
+            dbnum,
+            LdapFile::Text {
+                template: false,
+                content: content.to_string(),
+            },
+        ));
+        self
+    }
+
+    /// Add LDIF file
+    pub fn add_ldif_file<P: AsRef<Path>>(mut self, dbnum: u8, file: P) -> Self {
+        self.includes.push((
+            dbnum,
+            LdapFile::File {
+                template: true,
+                file: file.as_ref().to_path_buf(),
+            },
+        ));
+        self
+    }
+
+    /// Add LDIF file with text content as template
+    pub fn add_template_ldif(mut self, dbnum: u8, content: &str) -> Self {
+        self.includes.push((
+            dbnum,
+            LdapFile::Text {
+                template: true,
+                content: content.to_string(),
+            },
+        ));
+        self
+    }
+
+    /// Add LDIF file as template
+    pub fn add_template_ldif_file<P: AsRef<Path>>(mut self, dbnum: u8, file: P) -> Self {
+        self.includes.push((
+            dbnum,
+            LdapFile::File {
+                template: true,
+                file: file.as_ref().to_path_buf(),
+            },
+        ));
+        self
+    }
+
+    async fn build_config(includes: Vec<(u8, LdapFile)>, tmp_dir: &Path, system_schema_dir: &Path) {
+        for (idx, (dbnum, include)) in includes.into_iter().enumerate() {
+            let file = match include {
+                LdapFile::SystemSchema(file) => system_schema_dir.join(file),
+                LdapFile::File {
+                    template: false,
+                    file,
+                } => file,
+                LdapFile::Text {
+                    template: false,
+                    content,
+                } => {
+                    let tmp_ldif = tmp_dir.join(format!("tmp_{idx}.ldif"));
+                    tokio::fs::write(&tmp_ldif, content).await.unwrap();
+                    tmp_ldif
+                }
+                LdapFile::File { template: true, .. } | LdapFile::Text { template: true, .. } => {
+                    panic!("Templates should be already built");
+                }
+            };
+
+            LdapServerBuilder::load_ldif(tmp_dir, dbnum, file).await;
+        }
+    }
+
+    async fn load_ldif(config_dir: &Path, dbnum: u8, file: PathBuf) {
+        let db_number = dbnum.to_string();
         // load slapd configuration
         let output = Command::new("slapadd")
-            .args(["-F", ".", "-n"])
+            .arg("-F")
+            .arg(".")
+            .arg("-n")
             .arg(db_number)
             .arg("-l")
-            .arg(file)
-            .current_dir(&self.dir)
+            .arg(&file)
+            .current_dir(config_dir)
             .output()
             .await
             .expect("failed to execute slapadd");
@@ -96,21 +161,54 @@ impl LdapServerBuilder {
                 file.display()
             );
         }
-
-        self
     }
 
-    // Start LDAP server
-    pub async fn run(self) -> LdapServerConn {
+    async fn build_templates(&mut self, system_schema_dir: &Path) {
+        let schema_dir_url = Url::from_file_path(system_schema_dir).unwrap();
+
+        for (_, include) in &mut self.includes {
+            let content = match include {
+                LdapFile::File {
+                    template: true,
+                    file,
+                } => tokio::fs::read_to_string(file).await.unwrap(),
+                LdapFile::Text {
+                    template: true,
+                    content,
+                } => std::mem::take(content),
+                _ => continue,
+            };
+
+            let new_content = content
+                .replace("@SCHEMADIR@", schema_dir_url.as_ref())
+                .replace("@BASEDN@", &self.base_dn)
+                .replace("@ROOTDN@", &self.root_dn)
+                .replace("@ROOTPW@", &self.root_pw);
+
+            *include = LdapFile::Text {
+                template: false,
+                content: new_content,
+            };
+        }
+    }
+
+    pub async fn run(mut self) -> LdapServerConn {
+        let schema_dir = find_slapd_schema_dir()
+            .await
+            .expect("no slapd schema directory found. Is openldap server installed?");
         let host = "localhost".to_string();
         let port = portpicker::pick_unused_port().expect("no free tcp port to bind");
         let url = format!("ldap://{host}:{port}");
+        let dir = tempdir().unwrap();
+
+        self.build_templates(schema_dir).await;
+        LdapServerBuilder::build_config(self.includes, dir.path(), schema_dir).await;
 
         // lauch slapd server
         let mut server = Command::new("slapd")
             .args(["-F", ".", "-d", "2048", "-h", &url])
             .stderr(Stdio::piped())
-            .current_dir(&self.dir)
+            .current_dir(&dir)
             .spawn()
             .unwrap();
 
@@ -151,7 +249,7 @@ impl LdapServerBuilder {
             url,
             host,
             port,
-            dir: self.dir,
+            dir,
             base_dn: self.base_dn,
             root_dn: self.root_dn,
             root_pw: self.root_pw,
@@ -246,7 +344,7 @@ impl LdapServerConn {
     ) -> &Self {
         let file = file.as_ref();
 
-        let output = tokio::process::Command::new("ldapadd")
+        let output = Command::new("ldapadd")
             .args(["-x", "-D", binddn, "-w", password, "-H", self.url(), "-f"])
             .arg(file)
             .current_dir(&self.dir)
@@ -291,9 +389,10 @@ mod tests {
     async fn run_slapd() {
         let started = Instant::now();
 
-        let server = LdapServerBuilder::init("dc=planetexpress,dc=com")
-            .await
+        let server = LdapServerBuilder::new("dc=planetexpress,dc=com")
+            .add_system_ldif(0, "pmi.ldif")
             .add_ldif(
+                1,
                 "dn: dc=planetexpress,dc=com
 objectclass: dcObject
 objectclass: organization
@@ -305,9 +404,8 @@ objectClass: top
 objectClass: organizationalUnit
 description: Planet Express crew
 ou: people",
-                1,
             )
-            .await
+            .add_ldif_file(1, concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fry.ldif"))
             .run()
             .await;
 
@@ -324,9 +422,7 @@ description: Human
 givenName: Amy
 mail: amy@planetexpress.com
 ou: Intern
-uid: amy
-userPassword:: e1NTSEF9d0p2OXMyWjltMGJTMFIxV1k3QjdCRWZEVVZPQzg2Y3BWL3VDMHc9PQ=
- =",
+uid: amy",
             )
             .await;
 
