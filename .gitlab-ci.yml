@@ -21,7 +21,7 @@ test:
   stage: test
   image: "rustdocker/rust:stable"
   script:
-    - apt-get update && apt-get dist-upgrade -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends slapd ldap-utils
+    - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends slapd ldap-utils
     - cargo fmt -- --check
     - cargo verify-project
     - cargo clippy --all-features --tests -- -D warnings

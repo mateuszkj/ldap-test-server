@@ -1,7 +1,8 @@
 use cucumber::{given, then, when, World};
 use derivative::Derivative;
 use ldap3::{Ldap, LdapConnAsync, Scope};
-use ldap_test_server::{LdapServerBuilder, LdapServerConn};
+use ldap_test_server::LdapServerBuilder;
+use ldap_test_server::LdapServerConn;
 
 const LDAP_BASE_DN: &str = "dc=planetexpress,dc=com";
 

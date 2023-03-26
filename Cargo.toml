@@ -1,9 +1,15 @@
 [package]
 name = "ldap-test-server"
 version = "0.0.1"
+authors = ["Mateusz Kondej <m@kondej.net>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+rust-version = "1.56"
+license = "MIT OR Apache-2.0"
+description = "Running isolated OpenLDAP servers in integration tests"
+documentation = "https://docs.rs/ldap-test-server"
+repository = "https://gitlab.com/mateuszkj/ldap-test-server"
+keywords = ["ldap", "test"]
+categories = ["development-tools::testing"]
 
 [dependencies]
 portpicker = "0.1"
