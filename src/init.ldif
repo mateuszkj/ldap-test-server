@@ -12,6 +12,8 @@ olcLogLevel: none
 # The tool-threads parameter sets the actual amount of cpu's that is used
 # for indexing.
 olcToolThreads: 1
+olcDisallows: bind_anon
+olcRequires: authc
 
 # Frontend settings
 dn: olcDatabase={-1}frontend,cn=config
@@ -20,18 +22,12 @@ objectClass: olcFrontendConfig
 olcDatabase: {-1}frontend
 # The maximum number of entries that is returned for a search operation
 olcSizeLimit: 500
-# Allow unlimited access to local connection from the local root user
-olcAccess: {0}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
-# Allow unauthenticated read access for schema and base DN autodiscovery
-olcAccess: {1}to dn.exact="" by * read
-olcAccess: {2}to dn.base="cn=Subschema" by * read
+olcRequires: authc
 
 # Config db settings
 dn: olcDatabase=config,cn=config
 objectClass: olcDatabaseConfig
 olcDatabase: config
-# Allow unlimited access to local connection from the local root user
-olcAccess: to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
 olcRootDN: cn=admin,cn=config
 
 # Load schemas
@@ -70,6 +66,7 @@ olcDbIndex: objectClass eq
 olcDbIndex: cn,uid eq
 olcDbIndex: uidNumber,gidNumber eq
 olcDbIndex: member,memberUid eq
+olcRequires: authc
 # The userPassword by default can be changed by the entry owning it if
 # they are authenticated. Others should not be able to see it, except
 # the admin entry above.

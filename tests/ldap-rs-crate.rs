@@ -23,13 +23,46 @@ async fn test_bind() {
 }
 
 #[tokio::test]
+async fn test_forbidden_anonymous_access() {
+    let server = LdapServerBuilder::new("dc=kondej,dc=net").run().await;
+
+    let mut client = LdapClient::builder(server.host())
+        .port(server.port())
+        .connect()
+        .await
+        .unwrap();
+
+    let result = client
+        .search(
+            SearchRequest::builder()
+                .base_dn(server.base_dn())
+                .scope(SearchRequestScope::WholeSubtree)
+                .filter("(objectClass=*)")
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let items = result.try_collect::<Vec<_>>().await;
+    let error = match items {
+        Ok(_) => panic!("expected a error but got data"),
+        Err(e) => e,
+    };
+
+    assert_eq!(
+        format!("{error:?}"),
+        r#"OperationFailed(OperationError { result_code: UnwillingToPerform, matched_dn: "", diagnostic_message: "authentication required" })"#
+    );
+}
+
+#[tokio::test]
 async fn test_query() {
     let server = LdapServerBuilder::new("dc=planetexpress,dc=com")
         .run()
         .await;
 
     server
-        .add_ldif(
+        .add(
             "dn: dc=planetexpress,dc=com
 objectclass: dcObject
 objectclass: organization
@@ -43,7 +76,7 @@ description: Planet Express crew
 ou: people",
         )
         .await
-        .add_ldif_file(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fry.ldif"))
+        .add_file(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fry.ldif"))
         .await;
 
     let mut client = LdapClient::builder(server.host())
@@ -76,7 +109,7 @@ ou: people",
     );
 
     server
-        .add_ldif(
+        .add(
             "dn: cn=Turanga Leela,ou=people,dc=planetexpress,dc=com
 objectClass: inetOrgPerson
 objectClass: organizationalPerson
