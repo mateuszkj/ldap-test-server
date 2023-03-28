@@ -1,0 +1,13 @@
+dn: cn=Turanga Leela,ou=people,dc=planetexpress,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+objectClass: user
+cn: Turanga Leela
+sn: Turanga
+description: Mutant
+employeeType: Captain
+employeeType: Pilot
+givenName: Leela
+sAMAccountName: l.turanga

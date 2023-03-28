@@ -1,35 +1,6 @@
-[package]
-name = "ldap-test-server"
-version = "0.0.1"
-authors = ["Mateusz Kondej <m@kondej.net>"]
-edition = "2021"
-rust-version = "1.56"
-license = "MIT OR Apache-2.0"
-description = "Running isolated OpenLDAP servers in integration tests"
-documentation = "https://docs.rs/ldap-test-server"
-repository = "https://gitlab.com/mateuszkj/ldap-test-server"
-keywords = ["ldap", "test"]
-categories = ["development-tools::testing"]
+[workspace]
+members = [
+  "ldap-test-server",
+  "ldap-test-server-cli"
+]
 
-[dependencies]
-portpicker = "0.1"
-rand = "0.8"
-tempfile = "3"
-url = "2"
-tokio = { version  = "1", features = ["fs", "process", "time", "net", "io-util", "rt"] }
-dircpy = "0.3"
-tracing = "0.1"
-
-[dev-dependencies]
-ldap-rs = "0.4.0"
-tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
-futures-util = "0.3.27"
-cucumber = "0.19.1"
-ldap3 = "0.11.1"
-derivative = "2.2.0"
-strum = "0.24.1"
-strum_macros = "0.24.1"
-
-[[test]]
-name = "cucumber_ldap3"
-harness = false  # allows Cucumber to print output instead of libtest

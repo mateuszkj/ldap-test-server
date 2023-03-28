@@ -1,0 +1,16 @@
+dn: cn=user,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: user
+#
+olcAttributeTypes: ( 1.2.840.113556.4.221
+  NAME 'sAMAccountName'
+  SYNTAX '1.3.6.1.4.1.1466.115.121.1.15'
+  EQUALITY caseIgnoreMatch
+  SUBSTR caseIgnoreSubstringsMatch
+  SINGLE-VALUE )
+#
+olcObjectClasses: ( 1.2.840.113556.1.5.9
+  NAME 'user'
+  SUP top
+  AUXILIARY
+  MAY ( sAMAccountName ))

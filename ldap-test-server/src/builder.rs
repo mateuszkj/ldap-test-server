@@ -32,6 +32,8 @@ pub struct LdapServerBuilder {
     base_dn: String,
     root_dn: String,
     root_pw: String,
+    bind_addr: Option<String>,
+    port: Option<u16>,
     includes: Vec<(u8, LdapFile)>,
 }
 
@@ -50,6 +52,8 @@ impl LdapServerBuilder {
             base_dn,
             root_dn,
             root_pw,
+            bind_addr: None,
+            port: None,
             includes: vec![],
         }
     }
@@ -59,6 +63,18 @@ impl LdapServerBuilder {
         let root_dn = format!("cn=admin,{base_dn}");
         let root_pw = "secret".to_string();
         LdapServerBuilder::empty(base_dn, root_dn, root_pw).add_template(0, INIT_LDIF)
+    }
+
+    /// Listen address
+    pub fn bind_addr(mut self, bind_addr: &str) -> Self {
+        self.bind_addr = Some(bind_addr.to_string());
+        self
+    }
+
+    /// Listen port
+    pub fn port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
     }
 
     /// Add system LDIF from schema dir installed by slapd (usually in /etc/ldap/schema directory)
@@ -194,6 +210,8 @@ impl LdapServerBuilder {
     }
 
     async fn load_ldif(config_dir: &Path, dbnum: u8, file: PathBuf) {
+        debug!("slapadd dbnum: {dbnum} file: {}", file.display());
+
         let db_number = dbnum.to_string();
         // load slapd configuration
         let output = Command::new("slapadd")
@@ -265,10 +283,15 @@ impl LdapServerBuilder {
         let schema_dir = find_slapd_schema_dir()
             .await
             .expect("no slapd schema directory found. Is openldap server installed?");
-        let host = "127.0.0.1".to_string();
-        let port = portpicker::pick_unused_port().unwrap_or_else(|| {
-            let mut rng = rand::thread_rng();
-            rng.gen_range(15000..55000)
+        let host = self
+            .bind_addr
+            .clone()
+            .unwrap_or_else(|| "127.0.0.1".to_string());
+        let port = self.port.unwrap_or_else(|| {
+            portpicker::pick_unused_port().unwrap_or_else(|| {
+                let mut rng = rand::thread_rng();
+                rng.gen_range(15000..55000)
+            })
         });
 
         let url = format!("ldap://{host}:{port}");

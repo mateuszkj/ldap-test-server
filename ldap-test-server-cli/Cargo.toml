@@ -1,0 +1,12 @@
+[package]
+name = "ldap-test-server-cli"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "signal", "fs"] }
+ldap-test-server = { version = "0.0.1", path = "../ldap-test-server" }
+clap = { version = "4.1.14", features = ["derive"] }
