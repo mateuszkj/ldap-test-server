@@ -1,8 +1,9 @@
 use cucumber::{given, then, when, World};
 use derivative::Derivative;
-use ldap3::{Ldap, LdapConnAsync, Scope};
+use ldap3::{Ldap, LdapConnAsync, LdapConnSettings, Scope};
 use ldap_test_server::LdapServerBuilder;
 use ldap_test_server::LdapServerConn;
+use native_tls::{Certificate, TlsConnector};
 
 const LDAP_BASE_DN: &str = "dc=planetexpress,dc=com";
 
@@ -25,7 +26,16 @@ pub struct LdapWorld {
 impl LdapWorld {
     async fn connect_to_ldap(&mut self) {
         let server = self.server.as_ref().unwrap();
-        let (conn, ldap) = LdapConnAsync::new(server.url()).await.unwrap();
+        let cert = Certificate::from_pem(server.ssl_cert_pem().as_bytes()).unwrap();
+        let settings = LdapConnSettings::new().set_connector(
+            TlsConnector::builder()
+                .add_root_certificate(cert)
+                .build()
+                .expect("tls connector"),
+        );
+        let (conn, ldap) = LdapConnAsync::with_settings(settings, server.ssl_url())
+            .await
+            .unwrap();
         ldap3::drive!(conn);
         self.client = Some(ldap);
     }

@@ -1,13 +1,13 @@
 [package]
 name = "ldap-test-server"
-version = "0.0.1"
-authors = ["Mateusz Kondej <m@kondej.net>"]
-edition = "2021"
-rust-version = "1.56"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 description = "Running isolated OpenLDAP servers in integration tests"
 documentation = "https://docs.rs/ldap-test-server"
-repository = "https://gitlab.com/mateuszkj/ldap-test-server"
+repository.workspace = true
 keywords = ["ldap", "test"]
 categories = ["development-tools::testing"]
 
@@ -19,6 +19,7 @@ url = "2"
 tokio = { version  = "1", features = ["fs", "process", "time", "net", "io-util", "rt"] }
 dircpy = "0.3"
 tracing = "0.1"
+rcgen = "0.10.0"
 
 [dev-dependencies]
 ldap-rs = "0.4.0"
@@ -29,6 +30,7 @@ ldap3 = "0.11.1"
 derivative = "2.2.0"
 strum = "0.24.1"
 strum_macros = "0.24.1"
+native-tls = "0.2.11"
 
 [[test]]
 name = "cucumber_ldap3"

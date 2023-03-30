@@ -1,10 +1,13 @@
 use crate::LdapServerConn;
 use rand::Rng;
-use std::net::ToSocketAddrs;
+use rcgen::{Certificate, CertificateParams, SanType};
+use std::net::{IpAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::str::FromStr;
 use std::time::Duration;
 use tempfile::tempdir;
+use tokio::fs;
 use tokio::io::AsyncBufReadExt;
 use tokio::net::TcpStream;
 use tokio::process::Command;
@@ -34,6 +37,7 @@ pub struct LdapServerBuilder {
     root_pw: String,
     bind_addr: Option<String>,
     port: Option<u16>,
+    ssl_port: Option<u16>,
     includes: Vec<(u8, LdapFile)>,
 }
 
@@ -54,6 +58,7 @@ impl LdapServerBuilder {
             root_pw,
             bind_addr: None,
             port: None,
+            ssl_port: None,
             includes: vec![],
         }
     }
@@ -74,6 +79,12 @@ impl LdapServerBuilder {
     /// Listen port
     pub fn port(mut self, port: u16) -> Self {
         self.port = Some(port);
+        self
+    }
+
+    /// Listen SSL port
+    pub fn ssl_port(mut self, port: u16) -> Self {
+        self.ssl_port = Some(port);
         self
     }
 
@@ -245,7 +256,7 @@ impl LdapServerBuilder {
                 LdapFile::File {
                     template: true,
                     file,
-                } => tokio::fs::read_to_string(file).await.unwrap(),
+                } => fs::read_to_string(file).await.unwrap(),
                 LdapFile::Text {
                     template: true,
                     content,
@@ -294,15 +305,42 @@ impl LdapServerBuilder {
             })
         });
 
+        let ssl_port = self.ssl_port.unwrap_or_else(|| {
+            portpicker::pick_unused_port().unwrap_or_else(|| {
+                let mut rng = rand::thread_rng();
+                rng.gen_range(15000..55000)
+            })
+        });
+
         let url = format!("ldap://{host}:{port}");
+        let ssl_url = format!("ldaps://{host}:{ssl_port}");
         let dir = tempdir().unwrap();
+
+        let params = if let Ok(addr) = IpAddr::from_str(&host) {
+            let mut params = CertificateParams::new(vec![]);
+            params.subject_alt_names.push(SanType::IpAddress(addr));
+            params
+        } else {
+            CertificateParams::new(vec![host.clone()])
+        };
+
+        let cert = Certificate::from_params(params).unwrap();
+        let ssl_cert_pem = cert.serialize_pem().unwrap();
+        let ssl_key_pem = cert.serialize_private_key_pem();
+
+        let cert_pem = dir.path().join("cert.pem");
+        fs::write(&cert_pem, &ssl_cert_pem).await.unwrap();
+
+        let key_pem = dir.path().join("key.pem");
+        fs::write(&key_pem, &ssl_key_pem).await.unwrap();
 
         self.build_templates(schema_dir).await;
         LdapServerBuilder::build_config(self.includes, dir.path(), schema_dir).await;
 
-        // lauch slapd server
+        let urls = format!("{url} {ssl_url}");
+        // launch slapd server
         let mut server = Command::new("slapd")
-            .args(["-F", ".", "-d", "2048", "-h", &url])
+            .args(["-F", ".", "-d", "2048", "-h", &urls])
             .stderr(Stdio::piped())
             .current_dir(&dir)
             .spawn()
@@ -340,12 +378,15 @@ impl LdapServerBuilder {
             panic!("Failed to start slapd server, port {port} not open");
         }
 
-        debug!("Started ldap server on {url}");
+        debug!("Started ldap server on {urls}");
 
         LdapServerConn {
             url,
             host,
             port,
+            ssl_url,
+            ssl_port,
+            ssl_cert_pem,
             dir,
             base_dn: self.base_dn,
             root_dn: self.root_dn,

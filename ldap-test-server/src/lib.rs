@@ -55,6 +55,9 @@ pub struct LdapServerConn {
     url: String,
     host: String,
     port: u16,
+    ssl_url: String,
+    ssl_port: u16,
+    ssl_cert_pem: String,
     #[allow(unused)]
     dir: TempDir,
     base_dn: String,
@@ -64,7 +67,7 @@ pub struct LdapServerConn {
 }
 
 impl LdapServerConn {
-    /// Return URL (schema, host and port) to this LDAP server
+    /// Return URL (schema=ldap, host and port) to this LDAP server
     pub fn url(&self) -> &str {
         &self.url
     }
@@ -79,12 +82,27 @@ impl LdapServerConn {
         self.port
     }
 
+    /// Return URL (schema=ldaps, host and port) to this LDAP server
+    pub fn ssl_url(&self) -> &str {
+        &self.ssl_url
+    }
+
+    /// SSL (ldaps) TCP port number of this LDAP server
+    pub fn ssl_port(&self) -> u16 {
+        self.ssl_port
+    }
+
+    /// PEM Certificate for ssl port
+    pub fn ssl_cert_pem(&self) -> &str {
+        &self.ssl_cert_pem
+    }
+
     /// Base DN of this LDAP server
     pub fn base_dn(&self) -> &str {
         &self.base_dn
     }
 
-    /// Administator account of this LDAP server
+    /// Administrator account of this LDAP server
     pub fn root_dn(&self) -> &str {
         &self.root_dn
     }

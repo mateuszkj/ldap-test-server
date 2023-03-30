@@ -8,7 +8,7 @@ use tracing::level_filters::LevelFilter;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
-/// Simple program to greet a person
+/// Run OpenLDAP server
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -23,6 +23,10 @@ struct Args {
     /// Port of ldap server
     #[arg(long)]
     port: Option<u16>,
+
+    /// Port of ldaps server
+    #[arg(long)]
+    ssl_port: Option<u16>,
 
     /// Directory of ldif files with schema which be installed in database 0
     #[arg(short, long)]
@@ -65,6 +69,10 @@ o: ldap-test-server-cli"
         builder = builder.port(port);
     }
 
+    if let Some(ssl_port) = args.ssl_port {
+        builder = builder.ssl_port(ssl_port);
+    }
+
     let schema_files = if let Some(dir) = &args.schema_dir {
         list_ldif_files(dir)
             .await
@@ -98,13 +106,23 @@ o: ldap-test-server-cli"
         server.server_dir().display()
     );
 
-    info!(
-        "ldapsearch -x -H \"{}\" -D \"{}\" -w \"{}\" -b \"{}\" \"(objectClass=*)\"",
+    println!(
+        "PLAIN: ldapsearch -x -H \"{}\" -D \"{}\" -w \"{}\" -b \"{}\" \"(objectClass=*)\"",
         server.url(),
         server.root_dn(),
         server.root_pw(),
         server.base_dn(),
     );
+
+    println!(
+        "SSL: ldapsearch -x -H \"{}\" -D \"{}\" -w \"{}\" -b \"{}\" \"(objectClass=*)\"",
+        server.ssl_url(),
+        server.root_dn(),
+        server.root_pw(),
+        server.base_dn(),
+    );
+
+    println!("SSL Certificate:\n {}", server.ssl_cert_pem());
 
     info!("waiting for ctrl-c");
     signal::ctrl_c().await.expect("failed to listen for event");

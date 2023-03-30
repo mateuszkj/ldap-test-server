@@ -14,6 +14,8 @@ olcLogLevel: none
 olcToolThreads: 1
 olcDisallows: bind_anon
 olcRequires: authc
+olcTLSCertificateFile: cert.pem
+olcTLSCertificateKeyFile: key.pem
 
 # Frontend settings
 dn: olcDatabase={-1}frontend,cn=config
