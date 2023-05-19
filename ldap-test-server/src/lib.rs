@@ -265,7 +265,6 @@ impl LdapServerConn {
         let output = Command::new(command)
             .args(["-x", "-D", binddn, "-w", password, "-H", self.url(), "-f"])
             .arg(file)
-            .current_dir(&self.dir)
             .output()
             .await
             .expect("failed to load ldap file");

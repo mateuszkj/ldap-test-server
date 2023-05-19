@@ -1,8 +1,8 @@
 use clap::{arg, Parser};
 use ldap_test_server::LdapServerBuilder;
 use std::ffi::OsStr;
-use std::io;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing::{info, warn};
@@ -35,6 +35,18 @@ struct Args {
     /// Directory of ldif files with data which be installed in database 1
     #[arg(short, long)]
     data_dir: Option<PathBuf>,
+
+    /// LDIF template file
+    #[arg(long)]
+    init_ldif: Option<PathBuf>,
+
+    /// SSL server certificate
+    #[arg(long)]
+    ssl_cert: Option<PathBuf>,
+
+    /// SSL server certificate key
+    #[arg(long)]
+    ssl_key: Option<PathBuf>,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -51,15 +63,31 @@ async fn main() {
     info!("args: {args:?}");
     let base_dn = args.base_dn;
 
-    let mut builder = LdapServerBuilder::new(&base_dn).add(
-        1,
-        &format!(
-            "dn: {base_dn}
+    let mut builder = if let Some(ldif_file) = &args.init_ldif {
+        let root_dn = format!("cn=admin,{base_dn}");
+        let root_pw = "secret".to_string();
+        LdapServerBuilder::empty(base_dn.clone(), root_dn, root_pw).add_template_file(0, ldif_file)
+    } else {
+        LdapServerBuilder::new(&base_dn)
+    };
+
+    if let (Some(ssl_cert_file), Some(ssl_key_file)) = (&args.ssl_cert, &args.ssl_key) {
+        let cert = fs::read_to_string(ssl_cert_file).expect("read ssl cert file");
+        let key = fs::read_to_string(ssl_key_file).expect("read ssl cert file");
+        builder = builder.ssl_certificates(cert, key);
+    }
+
+    if args.data_dir.is_none() {
+        builder = builder.add(
+            1,
+            &format!(
+                "dn: {base_dn}
 objectclass: dcObject
 objectclass: organization
 o: ldap-test-server-cli"
-        ),
-    );
+            ),
+        );
+    }
 
     if let Some(bind_addr) = &args.bind_addr {
         builder = builder.bind_addr(bind_addr);
@@ -94,12 +122,11 @@ o: ldap-test-server-cli"
         vec![]
     };
 
+    let server = builder.run().await;
     for ldif in data_files {
         info!("add data file {}", ldif.display());
-        builder = builder.add_file(1, ldif);
+        server.add_file(ldif).await;
     }
-
-    let server = builder.run().await;
     info!(
         "Server started on: {} in dir {}",
         server.url(),

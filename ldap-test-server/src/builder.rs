@@ -39,6 +39,7 @@ pub struct LdapServerBuilder {
     port: Option<u16>,
     ssl_port: Option<u16>,
     includes: Vec<(u8, LdapFile)>,
+    ssl_cert_key: Option<(String, String)>,
 }
 
 impl LdapServerBuilder {
@@ -60,6 +61,7 @@ impl LdapServerBuilder {
             port: None,
             ssl_port: None,
             includes: vec![],
+            ssl_cert_key: None,
         }
     }
 
@@ -68,6 +70,12 @@ impl LdapServerBuilder {
         let root_dn = format!("cn=admin,{base_dn}");
         let root_pw = "secret".to_string();
         LdapServerBuilder::empty(base_dn, root_dn, root_pw).add_template(0, INIT_LDIF)
+    }
+
+    /// Use existing ssl certificate and key PEM
+    pub fn ssl_certificates(mut self, certificate: String, key: String) -> Self {
+        self.ssl_cert_key = Some((certificate, key));
+        self
     }
 
     /// Listen address
@@ -195,7 +203,16 @@ impl LdapServerBuilder {
         self
     }
 
-    async fn build_config(includes: Vec<(u8, LdapFile)>, tmp_dir: &Path, system_schema_dir: &Path) {
+    async fn build_config(
+        includes: Vec<(u8, LdapFile)>,
+        work_dir: &Path,
+        config_dir: &Path,
+        system_schema_dir: &Path,
+    ) {
+        fs::create_dir(&config_dir)
+            .await
+            .expect("cannot create config dir");
+
         for (idx, (dbnum, include)) in includes.into_iter().enumerate() {
             let file = match include {
                 LdapFile::SystemSchema(file) => system_schema_dir.join(file),
@@ -207,7 +224,7 @@ impl LdapServerBuilder {
                     template: false,
                     content,
                 } => {
-                    let tmp_ldif = tmp_dir.join(format!("tmp_{idx}.ldif"));
+                    let tmp_ldif = work_dir.join(format!("tmp_{idx}.ldif"));
                     tokio::fs::write(&tmp_ldif, content).await.unwrap();
                     tmp_ldif
                 }
@@ -216,7 +233,7 @@ impl LdapServerBuilder {
                 }
             };
 
-            LdapServerBuilder::load_ldif(tmp_dir, dbnum, file).await;
+            LdapServerBuilder::load_ldif(config_dir, dbnum, file).await;
         }
     }
 
@@ -227,12 +244,11 @@ impl LdapServerBuilder {
         // load slapd configuration
         let output = Command::new("slapadd")
             .arg("-F")
-            .arg(".")
+            .arg(config_dir)
             .arg("-n")
             .arg(db_number)
             .arg("-l")
             .arg(&file)
-            .current_dir(config_dir)
             .output()
             .await
             .expect("failed to execute slapadd");
@@ -248,8 +264,9 @@ impl LdapServerBuilder {
         }
     }
 
-    async fn build_templates(&mut self, system_schema_dir: &Path) {
+    async fn build_templates(&mut self, system_schema_dir: &Path, work_dir: &Path) {
         let schema_dir_url = Url::from_file_path(system_schema_dir).unwrap();
+        let work_dir_path = work_dir.display().to_string();
 
         for (_, include) in &mut self.includes {
             let content = match include {
@@ -266,6 +283,7 @@ impl LdapServerBuilder {
 
             let new_content = content
                 .replace("@SCHEMADIR@", schema_dir_url.as_ref())
+                .replace("@WORKDIR@", &work_dir_path)
                 .replace("@BASEDN@", &self.base_dn)
                 .replace("@ROOTDN@", &self.root_dn)
                 .replace("@ROOTPW@", &self.root_pw);
@@ -316,17 +334,22 @@ impl LdapServerBuilder {
         let ssl_url = format!("ldaps://{host}:{ssl_port}");
         let dir = tempdir().unwrap();
 
-        let params = if let Ok(addr) = IpAddr::from_str(&host) {
-            let mut params = CertificateParams::new(vec![]);
-            params.subject_alt_names.push(SanType::IpAddress(addr));
-            params
+        let (ssl_cert_pem, ssl_key_pem) = if let Some(keys) = self.ssl_cert_key.clone() {
+            keys
         } else {
-            CertificateParams::new(vec![host.clone()])
-        };
+            let params = if let Ok(addr) = IpAddr::from_str(&host) {
+                let mut params = CertificateParams::new(vec![]);
+                params.subject_alt_names.push(SanType::IpAddress(addr));
+                params
+            } else {
+                CertificateParams::new(vec![host.clone()])
+            };
 
-        let cert = Certificate::from_params(params).unwrap();
-        let ssl_cert_pem = cert.serialize_pem().unwrap();
-        let ssl_key_pem = cert.serialize_private_key_pem();
+            let cert = Certificate::from_params(params).unwrap();
+            let ssl_cert_pem = cert.serialize_pem().unwrap();
+            let ssl_key_pem = cert.serialize_private_key_pem();
+            (ssl_cert_pem, ssl_key_pem)
+        };
 
         let cert_pem = dir.path().join("cert.pem");
         fs::write(&cert_pem, &ssl_cert_pem).await.unwrap();
@@ -334,15 +357,20 @@ impl LdapServerBuilder {
         let key_pem = dir.path().join("key.pem");
         fs::write(&key_pem, &ssl_key_pem).await.unwrap();
 
-        self.build_templates(schema_dir).await;
-        LdapServerBuilder::build_config(self.includes, dir.path(), schema_dir).await;
+        self.build_templates(schema_dir, dir.path()).await;
+        let config_dir = dir.path().join("config");
+        LdapServerBuilder::build_config(self.includes, dir.path(), &config_dir, schema_dir).await;
 
         let urls = format!("{url} {ssl_url}");
         // launch slapd server
         let mut server = Command::new("slapd")
-            .args(["-F", ".", "-d", "2048", "-h", &urls])
+            .arg("-F")
+            .arg(&config_dir)
+            .arg("-d")
+            .arg("2048")
+            .arg("-h")
+            .arg(&urls)
             .stderr(Stdio::piped())
-            .current_dir(&dir)
             .spawn()
             .unwrap();
 

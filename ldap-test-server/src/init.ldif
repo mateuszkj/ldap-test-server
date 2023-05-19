@@ -4,9 +4,9 @@ objectClass: olcGlobal
 cn: config
 # Where the pid file is put. The init.d script
 # will not stop the server if you change this.
-olcPidFile: slapd.pid
+olcPidFile: @WORKDIR@/slapd.pid
 # List of arguments that were passed to the server
-olcArgsFile: slapd.args
+olcArgsFile: @WORKDIR@/slapd.args
 # Read slapd-config(5) for possible values
 olcLogLevel: none
 # The tool-threads parameter sets the actual amount of cpu's that is used
@@ -14,8 +14,8 @@ olcLogLevel: none
 olcToolThreads: 1
 olcDisallows: bind_anon
 olcRequires: authc
-olcTLSCertificateFile: cert.pem
-olcTLSCertificateKeyFile: key.pem
+olcTLSCertificateFile: @WORKDIR@/cert.pem
+olcTLSCertificateKeyFile: @WORKDIR@/key.pem
 
 # Frontend settings
 dn: olcDatabase={-1}frontend,cn=config
@@ -59,7 +59,7 @@ olcDbNosync: TRUE
 # The base of your directory in database #1
 olcSuffix: @BASEDN@
 # Where the database file are physically stored for database #1
-olcDbDirectory: .
+olcDbDirectory: @WORKDIR@
 # Database superuser credentials
 olcRootDN: @ROOTDN@
 olcRootPW: @ROOTPW@
