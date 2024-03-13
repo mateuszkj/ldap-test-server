@@ -7,5 +7,6 @@ license = "MIT OR Apache-2.0"
 repository = "https://gitlab.com/mateuszkj/ldap-test-server"
 
 [workspace]
+resolver = "2"
 members = ["ldap-test-server", "ldap-test-server-cli"]
 
