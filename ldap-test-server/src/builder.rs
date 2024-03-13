@@ -440,6 +440,8 @@ async fn find_slapd_schema_dir() -> Option<&'static Path> {
 
 async fn is_tcp_port_open(host: &str, port: u16) -> bool {
     let addr = (host, port).to_socket_addrs().unwrap().next().unwrap();
-    let Ok(sock) = timeout(Duration::from_secs(1), TcpStream::connect(&addr)).await else { return false };
+    let Ok(sock) = timeout(Duration::from_secs(1), TcpStream::connect(&addr)).await else {
+        return false;
+    };
     sock.is_ok()
 }

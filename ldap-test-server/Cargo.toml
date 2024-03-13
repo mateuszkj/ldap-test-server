@@ -12,25 +12,25 @@ keywords = ["ldap", "test"]
 categories = ["development-tools::testing"]
 
 [dependencies]
+dircpy = "0.3"
 portpicker = "0.1"
 rand = "0.8"
-tempfile = "3"
-url = "2"
-tokio = { version  = "1", features = ["fs", "process", "time", "net", "io-util", "rt"] }
-dircpy = "0.3"
-tracing = "0.1"
 rcgen = "0.10.0"
+tempfile = "3"
+tokio = { version = "1", features = ["fs", "process", "time", "net", "io-util", "rt"] }
+tracing = "0.1"
+url = "2"
 
 [dev-dependencies]
-ldap-rs = "0.4.1"
-tokio = { version = "1.28.1", features = ["rt-multi-thread", "macros"] }
-futures-util = "0.3.28"
 cucumber = "0.19.1"
-ldap3 = "0.11.1"
 derivative = "2.2.0"
+futures-util = "0.3.28"
+ldap-rs = "0.4.1"
+ldap3 = "0.11.1"
+native-tls = "0.2.11"
 strum = "0.24.1"
 strum_macros = "0.24.3"
-native-tls = "0.2.11"
+tokio = { version = "1.28.1", features = ["rt-multi-thread", "macros"] }
 
 [[test]]
 name = "cucumber_ldap3"

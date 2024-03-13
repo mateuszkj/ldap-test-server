@@ -7,10 +7,9 @@
 # Dependencies
 
 This crate depends on system commands that has to be available from $PATH
- - slapdd
  - slapd
  - ldapadd
- - ldapmodiy
+ - ldapmodify
  - ldapdelete
 
 ## How to install slpad and ldap-utils on Ubuntu
@@ -21,6 +20,11 @@ sudo systemctl stop slapd
 sudo systemctl disable slapd
 sudo ln -s /etc/apparmor.d/usr.sbin.slapd /etc/apparmor.d/disable/
 sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.slapd
+```
+
+or run:
+```
+just install-dev
 ```
 
 ## License

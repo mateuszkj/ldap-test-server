@@ -11,8 +11,8 @@ keywords = ["ldap"]
 categories = ["command-line-utilities", "development-tools::testing"]
 
 [dependencies]
+clap = { version = "4.2.7", features = ["derive"] }
+ldap-test-server = { version = "0.0.3", path = "../ldap-test-server" }
+tokio = { version = "1.28.1", features = ["rt-multi-thread", "macros", "signal", "fs"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-tokio = { version = "1.28.1", features = ["rt-multi-thread", "macros", "signal", "fs"] }
-ldap-test-server = { version = "0.0.3", path = "../ldap-test-server" }
-clap = { version = "4.2.7", features = ["derive"] }
