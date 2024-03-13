@@ -28,3 +28,7 @@ lint: fmt check
 test:
 	cargo test
 
+# Test if creates can be publushed
+publush-dry-run:
+	cargo publish -p ldap-test-server --dry-run
+	cargo publish -p ldap-test-server-cli --dry-run
