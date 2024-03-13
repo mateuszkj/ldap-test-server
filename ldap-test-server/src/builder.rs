@@ -377,7 +377,7 @@ impl LdapServerBuilder {
         // wait unitl slapd server has started
         let stderr = server.stderr.take().unwrap();
         let mut lines = tokio::io::BufReader::new(stderr).lines();
-        let timeouted = timeout(Duration::from_secs(10), async {
+        let timeouted = timeout(Duration::from_secs(60), async {
             while let Some(line) = lines.next_line().await.unwrap() {
                 debug!("slapd: {line}");
                 if line.ends_with("slapd starting") {
@@ -393,7 +393,7 @@ impl LdapServerBuilder {
             panic!("Failed to start slapd server: timeout");
         }
 
-        let timeouted = timeout(Duration::from_secs(2), async {
+        let timeouted = timeout(Duration::from_secs(60), async {
             while !is_tcp_port_open(&host, port).await {
                 debug!("tcp port {port} is not open yet, waiting...");
                 sleep(Duration::from_micros(100)).await;
