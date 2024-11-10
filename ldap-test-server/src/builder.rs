@@ -1,6 +1,6 @@
 use crate::LdapServerConn;
 use rand::Rng;
-use rcgen::{Certificate, CertificateParams, SanType};
+use rcgen::{CertificateParams, KeyPair, SanType};
 use std::net::{IpAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -338,16 +338,17 @@ impl LdapServerBuilder {
             keys
         } else {
             let params = if let Ok(addr) = IpAddr::from_str(&host) {
-                let mut params = CertificateParams::new(vec![]);
+                let mut params = CertificateParams::new(vec![]).unwrap();
                 params.subject_alt_names.push(SanType::IpAddress(addr));
                 params
             } else {
-                CertificateParams::new(vec![host.clone()])
+                CertificateParams::new(vec![host.clone()]).unwrap()
             };
 
-            let cert = Certificate::from_params(params).unwrap();
-            let ssl_cert_pem = cert.serialize_pem().unwrap();
-            let ssl_key_pem = cert.serialize_private_key_pem();
+            let key_pair = KeyPair::generate().unwrap();
+            let cert = params.self_signed(&key_pair).unwrap();
+            let ssl_cert_pem = cert.pem();
+            let ssl_key_pem = key_pair.serialize_pem();
             (ssl_cert_pem, ssl_key_pem)
         };
 
