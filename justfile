@@ -26,7 +26,7 @@ lint: fmt
     cargo deny check
     cargo +nightly udeps
     cargo msrv verify --path ldap-test-server/
-    cargo msrv verify --path ladp-test-server-cli/
+    cargo msrv verify --path ldap-test-server-cli/
 
 # Run tests
 test:

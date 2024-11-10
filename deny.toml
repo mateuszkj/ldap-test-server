@@ -11,7 +11,7 @@ allow = [
 confidence-threshold = 1.0
 
 [[licenses.clarify]]
-# Licnese https://github.com/briansmith/ring/blob/main/LICENSE
+# License https://github.com/briansmith/ring/blob/main/LICENSE
 name = "ring"
 expression = "LicenseRef-ring"
 license-files = [
