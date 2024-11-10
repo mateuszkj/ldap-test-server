@@ -1,5 +1,5 @@
 use cucumber::{given, then, when, World};
-use derivative::Derivative;
+use derive_more::Debug;
 use ldap3::{Ldap, LdapConnAsync, LdapConnSettings, Scope};
 use ldap_test_server::LdapServerBuilder;
 use ldap_test_server::LdapServerConn;
@@ -7,8 +7,7 @@ use native_tls::{Certificate, TlsConnector};
 
 const LDAP_BASE_DN: &str = "dc=planetexpress,dc=com";
 
-#[derive(Default, Derivative, World)]
-#[derivative(Debug)]
+#[derive(Debug, Default, World)]
 pub struct LdapWorld {
     /// LDAP server builder
     builder: Option<LdapServerBuilder>,
@@ -16,7 +15,7 @@ pub struct LdapWorld {
     server: Option<LdapServerConn>,
 
     /// Client connection to ldap server
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     client: Option<Ldap>,
 
     login_result: Option<ldap3::result::Result<()>>,
