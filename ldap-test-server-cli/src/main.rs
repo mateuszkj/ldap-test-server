@@ -9,7 +9,7 @@ use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 /// Run OpenLDAP server
-#[derive(Parser, Debug)]
+#[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Base DN

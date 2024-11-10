@@ -374,7 +374,7 @@ impl LdapServerBuilder {
             .spawn()
             .unwrap();
 
-        // wait unitl slapd server has started
+        // wait until slapd server has started
         let stderr = server.stderr.take().unwrap();
         let mut lines = tokio::io::BufReader::new(stderr).lines();
         let timeouted = timeout(Duration::from_secs(60), async {

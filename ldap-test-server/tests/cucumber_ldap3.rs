@@ -7,7 +7,7 @@ use native_tls::{Certificate, TlsConnector};
 
 const LDAP_BASE_DN: &str = "dc=planetexpress,dc=com";
 
-#[derive(Derivative, Default, World)]
+#[derive(Default, Derivative, World)]
 #[derivative(Debug)]
 pub struct LdapWorld {
     /// LDAP server builder
