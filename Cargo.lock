@@ -1051,7 +1051,7 @@ dependencies = [
 
 [[package]]
 name = "ldap-test-server"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "cucumber",
  "derive_more 1.0.0",
@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "ldap-test-server-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "clap",
  "ldap-test-server",

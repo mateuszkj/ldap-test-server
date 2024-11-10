@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "development-tools::testing"]
 
 [dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
-ldap-test-server = { version = "0.1.1", path = "../ldap-test-server" }
+ldap-test-server = { version = "0.1.2", path = "../ldap-test-server" }
 tokio = { version = "1.29.1", features = ["rt-multi-thread", "macros", "signal", "fs"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
