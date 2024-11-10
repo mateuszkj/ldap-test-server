@@ -13,8 +13,8 @@ categories = ["development-tools::testing"]
 
 [dependencies]
 dircpy = "0.3"
-portpicker = "0.1"
 rand = "0.8"
+random-port = "0.1"
 rcgen = "0.13"
 tempfile = "3"
 tokio = { version = "1", features = ["fs", "process", "time", "net", "io-util", "rt"] }

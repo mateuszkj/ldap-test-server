@@ -1,5 +1,6 @@
 use crate::LdapServerConn;
 use rand::Rng;
+use random_port::PortPicker;
 use rcgen::{CertificateParams, KeyPair, SanType};
 use std::net::{IpAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
@@ -316,15 +317,16 @@ impl LdapServerBuilder {
             .bind_addr
             .clone()
             .unwrap_or_else(|| "127.0.0.1".to_string());
+        let port_picker = PortPicker::new().random(true);
         let port = self.port.unwrap_or_else(|| {
-            portpicker::pick_unused_port().unwrap_or_else(|| {
+            port_picker.pick().unwrap_or_else(|_| {
                 let mut rng = rand::thread_rng();
                 rng.gen_range(15000..55000)
             })
         });
 
         let ssl_port = self.ssl_port.unwrap_or_else(|| {
-            portpicker::pick_unused_port().unwrap_or_else(|| {
+            port_picker.pick().unwrap_or_else(|_| {
                 let mut rng = rand::thread_rng();
                 rng.gen_range(15000..55000)
             })
