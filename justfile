@@ -42,5 +42,5 @@ find-msrv-cli:
 
 # Test if creates can be publushed
 publish-dry-run:
-    cargo publish -p ldap-test-server --dry-run
-    cargo publish -p ldap-test-server-cli --dry-run
+    cargo publish -p ldap-test-server --allow-dirty --dry-run
+    cargo publish -p ldap-test-server-cli --allow-dirty --dry-run
