@@ -1,0 +1,29 @@
+[licenses]
+allow = [
+    "Apache-2.0",
+    "ISC",
+    "LicenseRef-ring",
+    "MIT",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+confidence-threshold = 1.0
+
+[[licenses.clarify]]
+# Licnese https://github.com/briansmith/ring/blob/main/LICENSE
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[bans]
+multiple-versions = "allow"
+# I'd rather have this be "deny", but the workspace dependences are
+# falsely reports as a wildcard. (See hhttps://github.com/EmbarkStudios/cargo-deny/issues/241.)
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
